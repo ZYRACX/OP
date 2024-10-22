@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Tycoon Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <style>
+        .card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border: 1px solid #e5e7eb;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: #3b82f6;
+            transition: width 0.3s ease;
+        }
+
+        .animate-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        .disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .button {
+            background: #3b82f6;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .button:hover:not(.disabled) {
+            background: #2563eb;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="max-w-6xl mx-auto">
+        <!-- Refresh Button -->
+        <div class="text-right mb-4">
+            <button id="refreshButton" class="button">
+                <span class="icon">↻</span>
+                Refresh
+            </button>
+        </div>
+
+        <!-- Currency Stats -->
+        <div class="stats-grid">
+            <div class="card">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-sm font-medium">Wallet Balance</h3>
+                    <span class="icon text-yellow-500">💰</span>
+                </div>
+                <div id="walletBalance" class="text-2xl font-bold">0 BC</div>
+            </div>
+
+            <div class="card">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-sm font-medium">Bank Balance</h3>
+                    <span class="icon text-blue-500">🏦</span>
+                </div>
+                <div id="bankBalance" class="text-2xl font-bold">0 BC</div>
+            </div>
+
+            <div class="card">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="text-sm font-medium">Inventory Value</h3>
+                    <span class="icon text-green-500">📦</span>
+                </div>
+                <div id="inventoryValue" class="text-2xl font-bold">0 BC</div>
+            </div>
+        </div>
+
+        <!-- Player Tier -->
+        <div class="card">
+            <h3 class="text-xl font-bold mb-2">Business Tier: <span id="tierLevel">Bronze</span></h3>
+            <div class="progress-bar">
+                <div id="tierProgress" class="progress-bar-fill" style="width: 0%"></div>
+            </div>
+            <p class="text-sm text-gray-500 mt-2"><span id="tierProgressText">0</span>% progress to next tier</p>
+        </div>
+
+        <!-- Active Quests -->
+        <div class="card">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold">Active Quests</h3>
+                <button id="resetQuests" class="button">
+                    <span class="icon">↻</span>
+                    Reset Quests
+                </button>
+            </div>
+            <div id="questsList"></div>
+        </div>
+
+        <!-- Daily Reward -->
+        <div class="card text-center">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold">Daily Reward</h3>
+                <span class="icon">⏰</span>
+            </div>
+            <div id="dailyRewardTimer" class="text-2xl font-bold">00:00:00</div>
+            <p class="text-sm text-gray-500">until next reward</p>
+            <button id="claimReward" class="button mt-4 disabled" disabled>Claim Reward</button>
+        </div>
+    </div>
+
+    <script>
+        // Game state
+        let gameData = {
+            player: {
+                wallet: 0,
+                bank: 0,
+                inventory: 0,
+                tier: 'Bronze',
+                tierProgress: 0,
+                lastDailyReward: null
+            },
+            quests: [],
+            loading: false
+        };
+
+        // Helper functions
+        function formatNumber(num) {
+            return num.toLocaleString();
+        }
+
+        function setLoading(isLoading) {
+            gameData.loading = isLoading;
+            document.querySelectorAll('.card').forEach(card => {
+                card.classList.toggle('animate-pulse', isLoading);
+            });
+        }
+
+        // Simulate API call
+        async function fetchGameData() {
+            setLoading(true);
+            try {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                gameData.player = {
+                    wallet: Math.floor(Math.random() * 10000),
+                    bank: Math.floor(Math.random() * 50000),
+                    inventory: Math.floor(Math.random() * 25000),
+                    tier: ['Bronze', 'Silver', 'Gold', 'Platinum'][Math.floor(Math.random() * 4)],
+                    tierProgress: Math.floor(Math.random() * 100),
+                    lastDailyReward: new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000)
+                };
+
+                gameData.quests = Array.from({ length: 3 }, (_, i) => ({
+                    id: i + 1,
+                    title: ['Market Research', 'Supply Chain Optimization', 'Investment Strategy'][i],
+                    reward: Math.floor(Math.random() * 1000) + 500,
+                    progress: Math.floor(Math.random() * 100),
+                    timeLeft: `${Math.floor(Math.random() * 12)}:${Math.floor(Math.random() * 60)}:${Math.floor(Math.random() * 60)}`
+                }));
+
+                updateUI();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // Update UI elements
+        function updateUI() {
+            // Update balances
+            document.getElementById('walletBalance').textContent = `${formatNumber(gameData.player.wallet)} BC`;
+            document.getElementById('bankBalance').textContent = `${formatNumber(gameData.player.bank)} BC`;
+            document.getElementById('inventoryValue').textContent = `${formatNumber(gameData.player.inventory)} BC`;
+
+            // Update tier
+            document.getElementById('tierLevel').textContent = gameData.player.tier;
+            document.getElementById('tierProgress').style.width = `${gameData.player.tierProgress}%`;
+            document.getElementById('tierProgressText').textContent = gameData.player.tierProgress;
+
+            // Update quests
+            const questsList = document.getElementById('questsList');
+            questsList.innerHTML = gameData.quests.map(quest => `
+                <div class="mb-4">
+                    <div class="flex justify-between items-center mb-2">
+                        <h4 class="font-medium">${quest.title}</h4>
+                        <span class="text-yellow-500">${quest.reward} BC</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill" style="width: ${quest.progress}%"></div>
+                    </div>
+                    <div class="flex justify-between text-sm text-gray-500 mt-1">
+                        <span>${quest.progress}% Complete</span>
+                        <span>${quest.timeLeft} remaining</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Timer functions
+        function updateDailyRewardTimer() {
+            if (!gameData.player.lastDailyReward) return;
+
+            const now = new Date();
+            const lastReward = new Date(gameData.player.lastDailyReward);
+            const nextReward = new Date(lastReward.getTime() + 24 * 60 * 60 * 1000);
+            const diff = nextReward.getTime() - now.getTime();
+
+            const timerElement = document.getElementById('dailyRewardTimer');
+            const claimButton = document.getElementById('claimReward');
+
+            if (diff <= 0) {
+                timerElement.textContent = '00:00:00';
+                claimButton.classList.remove('disabled');
+                claimButton.disabled = false;
+                return;
+            }
+
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+            timerElement.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            claimButton.classList.add('disabled');
+            claimButton.disabled = true;
+        }
+
+        // Event listeners
+        document.getElementById('refreshButton').addEventListener('click', fetchGameData);
+
+        document.getElementById('resetQuests').addEventListener('click', async () => {
+            const button = document.getElementById('resetQuests');
+            button.classList.add('disabled');
+            button.disabled = true;
+            await fetchGameData();
+            button.classList.remove('disabled');
+            button.disabled = false;
+        });
+
+        document.getElementById('claimReward').addEventListener('click', async () => {
+            const button = document.getElementById('claimReward');
+            if (!button.disabled) {
+                button.textContent = 'Claiming...';
+                button.classList.add('disabled');
+                button.disabled = true;
+                await fetchGameData();
+                button.textContent = 'Claim Reward';
+            }
+        });
+
+        // Initialize
+        fetchGameData();
+        setInterval(updateDailyRewardTimer, 1000);
+    </script>
+</body>
+</html>
